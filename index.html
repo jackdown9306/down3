@@ -3,130 +3,307 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>酷炫霓虹横版问答游戏</title>
+<title>你是好人吗？— 霓虹酷炫完整版</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0f1f">
 <style>
-  html, body {
+  :root {
+    --maxw: 980px;
+    --accent: #66ffd1;
+    --accent2: #8ab4ff;
+    --bg0: #050812;
+    --bg1: #0b1022;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
     margin: 0;
-    height: 100%;
-    background: black;
-    font-family: system-ui, sans-serif;
-    color: white;
-    overflow: hidden;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    color: #eaf2ff;
+    background: radial-gradient(1200px 700px at 10% 10%, rgba(0,180,255,.06), transparent 60%),
+                radial-gradient(1200px 700px at 90% 90%, rgba(102,255,209,.04), transparent 60%),
+                linear-gradient(180deg, var(--bg0), var(--bg1));
+    display: grid;
+    place-items: center;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  canvas { display: block; width: 100vw; height: 100vh; background: black; }
+  .frame { width: min(100vw, var(--maxw)); padding: 14px; }
+  .hud {
+    display:flex; align-items:center; justify-content:space-between; gap:.6rem;
+    margin:.6rem auto .4rem; font-size:13px; letter-spacing:.2px; opacity:.98;
+  }
+  .badge { padding:.35rem .65rem; background: rgba(11,17,35,.6); border-radius:.6rem; border:1px solid rgba(255,255,255,.06); }
+  .stage {
+    aspect-ratio: 16/9; width: 100%; position: relative; overflow: hidden;
+    border-radius: 14px; border:1px solid rgba(255,255,255,.06); background: linear-gradient(180deg,#07101f,#041022 55%);
+    box-shadow: 0 8px 30px rgba(0,0,0,.45);
+  }
+  canvas#game { width:100%; height:100%; display:block; background: transparent; }
+  .grid { pointer-events:none; position:absolute; inset:0; mix-blend-mode: screen; opacity:.28;
+    background:
+      linear-gradient(transparent 49%, rgba(120,180,255,.12) 50%, transparent 51%) 0 0/100% 42px,
+      linear-gradient(90deg, transparent 49%, rgba(102,255,209,.08) 50%, transparent 51%) 0 0/42px 100%;
+    filter: drop-shadow(0 0 6px rgba(120,180,255,.06));
+  }
   .panel {
-    position: absolute;
-    left: 50%;
-    bottom: 20px;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.6);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 10px;
-    padding: 10px;
-    width: 90%;
-    max-width: 600px;
+    position:absolute; left:0; right:0; bottom:0;
+    background: linear-gradient(180deg, rgba(8,12,28,.12), rgba(8,12,28,.85));
+    padding:.9rem; display:grid; gap:.6rem; border-top:1px solid rgba(255,255,255,.06);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   }
-  .q { font-weight: bold; margin-bottom: 10px; font-size: 1.2em; }
-  .choices {
-    display: flex; gap: 10px;
-  }
+  .q { font-weight:800; font-size:18px; text-shadow:0 1px 0 rgba(0,0,0,.4); }
+  .choices { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; margin-top:.2rem; }
   button.choice {
-    flex: 1;
-    padding: 10px;
-    font-size: 1em;
-    background: #111;
-    color: #0ff;
-    border: 1px solid #0ff;
-    border-radius: 6px;
-    cursor: pointer;
+    font-weight:700; padding:.8rem; border-radius:.6rem; cursor:pointer;
+    border:1px solid rgba(255,255,255,.08); color:#eaf2ff;
+    background: linear-gradient(180deg, rgba(14,18,38,.65), rgba(10,14,28,.9));
+    -webkit-tap-highlight-color: rgba(255,255,255,0.03);
   }
-  button.choice:hover {
-    background: #0ff;
-    color: black;
-  }
+  button.choice.good { box-shadow: 0 6px 18px rgba(102,255,209,0.06); }
+  button.choice.bad  { box-shadow: 0 6px 18px rgba(138,180,255,0.05); }
+  .toolbar { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.2rem; }
+  .btn { padding:.4rem .6rem; border-radius:.5rem; cursor:pointer; border:1px solid rgba(255,255,255,.06); background: rgba(12,16,28,.6); color:#eaf2ff; }
+  .toast { position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.45); padding:.4rem .6rem; border-radius:.6rem; display:none; border:1px solid rgba(255,255,255,.06); }
+  .watermark { position:absolute; right:10px; top:10px; opacity:.25; font-size:12px; }
+  @media (max-width:480px){ .choices{grid-template-columns:1fr;} .q{font-size:16px;} }
 </style>
 </head>
 <body>
-<canvas id="game"></canvas>
-<div class="panel">
-  <div class="q" id="question">你是好人吗？</div>
-  <div class="choices">
-    <button class="choice" id="c1">是，我是好人</button>
-    <button class="choice" id="c2">不是，我不是好人</button>
+<div class="frame">
+  <div class="hud"><div class="badge">场景 <span id="sceneIdx">1</span>/<span id="sceneTotal">1</span></div><div class="badge">分支：<span id="pathName">未定</span></div></div>
+  <div class="stage" id="stage">
+    <canvas id="game" width="960" height="540" aria-label="横版问答通关"></canvas>
+    <div class="grid"></div>
+    <div id="toast" class="toast"></div>
+    <div class="panel">
+      <div class="q" id="question">你是好人吗？</div>
+      <div class="choices">
+        <button class="choice good" id="c1" type="button">是，我是好人</button>
+        <button class="choice bad" id="c2" type="button">不是，我不是好人</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="btnBack" type="button">上一步</button>
+        <button class="btn" id="btnRestart" type="button">重新开始</button>
+      </div>
+      <div class="watermark">Neo Edition</div>
+    </div>
   </div>
 </div>
-<script>
-// 霓虹背景
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-canvas.width = innerWidth;
-canvas.height = innerHeight;
 
+<script>
+/* ---------- 问题图谱 ---------- */
 const NODES = {
-  start: { text: '你是好人吗？', good: {label: '是，我是好人', next: 'g1'}, bad: {label: '不是，我不是好人', next: 'b1'} },
-  g1: { text: '作为好人，你做过坏事吗？', good: {label: '有', next: 'end'}, bad: {label: '没有', next: 'end'} },
-  b1: { text: '作为坏人，你做过好事吗？', good: {label: '有', next: 'end'}, bad: {label: '没有', next: 'end'} },
-  end: { text: '游戏结束', good: {label: '重新开始', next: 'start'}, bad: {label: '重新开始', next: 'start'} }
+  start: { id:'start', text:'你是好人吗？', good:{label:'是，我是好人', next:'g1'}, bad:{label:'不是，我不是好人', next:'b1'} },
+  g1: { id:'g1', text:'作为好人，你是否做过让你后悔的坏事？', good:{label:'有，但我努力补救', next:'g2'}, bad:{label:'从不，我洁身自好', next:'g2b'} },
+  g2: { id:'g2', text:'你帮过陌生人却不求回报吗？', good:{label:'经常，这让我开心', next:'g3'}, bad:{label:'偶尔，看心情', next:'g3b'} },
+  g2b:{ id:'g2b', text:'当朋友犯错，你会如实指出吗？', good:{label:'会，忠言逆耳', next:'g3'}, bad:{label:'看关系深浅', next:'g3b'} },
+  g3: { id:'g3', text:'面对不公，你敢为弱者发声吗？', good:{label:'敢，我会站出来', next:'g4'}, bad:{label:'怕麻烦，少管为妙', next:'g4b'} },
+  g3b:{ id:'g3b', text:'你是否愿意为过错道歉并承担后果？', good:{label:'愿意，责任在我', next:'g4'}, bad:{label:'不会，时间会淡化', next:'g4b'} },
+  g4: { id:'g4', text:'恭喜，你在好人之路越走越远！继续前进？', good:{label:'继续，向更远处', next:'gend'}, bad:{label:'先到这吧', next:'gend'} },
+  g4b:{ id:'g4b', text:'好人与人的距离，常在一个决定之间。', good:{label:'我想做得更好', next:'gend'}, bad:{label:'保持现状就好', next:'gend'} },
+  gend:{ id:'gend', text:'好人结局：路很长，持续选择善。', good:{label:'重新开始', next:'start'}, bad:{label:'换走坏人线', next:'b1'} },
+
+  b1: { id:'b1', text:'作为“坏人”，你做过什么好事吗？', good:{label:'有，偶尔会心软', next:'b2'}, bad:{label:'没有，我行我素', next:'b2b'} },
+  b2: { id:'b2', text:'如果有人曾帮助你，你会回报吗？', good:{label:'会，恩情要还', next:'b3'}, bad:{label:'不欠谁的', next:'b3b'} },
+  b2b:{ id:'b2b', text:'你是否把“坏”当成保护色？', good:{label:'也许吧，我怕受伤', next:'b3'}, bad:{label:'不，我喜欢掌控', next:'b3b'} },
+  b3: { id:'b3', text:'当你做了坏事，良心会不安吗？', good:{label:'会，我想补偿', next:'b4'}, bad:{label:'不会，适者生存', next:'b4b'} },
+  b3b:{ id:'b3b', text:'你是否愿意为了重要的人改变？', good:{label:'愿意，值得', next:'b4'}, bad:{label:'不，谁也别想', next:'b4b'} },
+  b4: { id:'b4', text:'也许你并不坏，只是不被理解。', good:{label:'我想重新开始', next:'bend'}, bad:{label:'让我再想想', next:'bend'} },
+  b4b:{ id:'b4b', text:'坏并不难，难的是停下来回头看。', good:{label:'或许该停一停', next:'bend'}, bad:{label:'继续向下走', next:'bend'} },
+  bend:{ id:'bend', text:'坏人结局：向下走多了，也别忘了抬头看看。', good:{label:'返回开局', next:'start'}, bad:{label:'试试好人线', next:'g1'} }
 };
 
+/* ---------- 画布/状态 ---------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function fitCanvas(){
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.round(rect.width);
+  canvas.height = Math.round(rect.height);
+}
+fitCanvas();
+window.addEventListener('resize', ()=>{ fitCanvas(); });
+
+// camera & player
+let camera = { x:0, y:0 };
+let player = { x: 72, y: canvas.height - 120, r: 18, moving:false };
+let sceneIndex = 1, sceneTotal = 1;
+let path = '未定';
 let current = NODES.start;
+let historyStack = [];
 
-// 主角
-let player = {x: 100, y: canvas.height/2, r: 15};
+// effects
+const stars = Array.from({length: 160}, ()=>({ x: Math.random()*3000-800, y: Math.random()*300, s: Math.random()*2+0.4, spd: Math.random()*0.2+0.02 }));
+let scanT = 0;
+const trail = [];
 
-// 动画星空
-let stars = Array.from({length: 100}, () => ({
-  x: Math.random()*canvas.width,
-  y: Math.random()*canvas.height,
-  r: Math.random()*2+1
-}));
+const sceneIdxEl = document.getElementById('sceneIdx');
+const sceneTotalEl = document.getElementById('sceneTotal');
+const pathNameEl = document.getElementById('pathName');
+const qEl = document.getElementById('question');
+const c1 = document.getElementById('c1');
+const c2 = document.getElementById('c2');
+const toast = document.getElementById('toast');
+const btnBack = document.getElementById('btnBack');
+const btnRestart = document.getElementById('btnRestart');
 
-function drawBackground(){
-  ctx.fillStyle = "black";
+/* ---------- 渲染 ---------- */
+function drawBackground(dt){
+  // sky gradient
+  ctx.fillStyle = "#07101f";
   ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.strokeStyle = "rgba(0,255,255,0.3)";
-  for(let i=0;i<stars.length;i++){
-    ctx.beginPath();
-    ctx.arc(stars[i].x, stars[i].y, stars[i].r, 0, Math.PI*2);
-    ctx.fillStyle = "#0ff";
-    ctx.fill();
+  // nebula
+  const grad = ctx.createLinearGradient(0,0,0,canvas.height*0.55);
+  grad.addColorStop(0, "rgba(120,180,255,.12)");
+  grad.addColorStop(1, "rgba(6,10,18,0)");
+  ctx.fillStyle = grad; ctx.fillRect(0,0,canvas.width,canvas.height*0.55);
+
+  // stars
+  stars.forEach(s=>{
+    s.x -= s.spd * (1 + camera.x*0.0003);
+    if(s.x < -500) s.x += 3500;
+    ctx.fillStyle = "rgba(160,200,255,0.85)";
+    ctx.fillRect(s.x - camera.x*0.09, s.y - camera.y*0.03, s.s, s.s);
+  });
+
+  // cyber grid
+  ctx.save();
+  ctx.translate(-camera.x*0.26, canvas.height*0.72 - camera.y*0.2);
+  ctx.strokeStyle = "rgba(120,180,255,0.18)";
+  ctx.lineWidth = 1;
+  for(let i=0;i<18;i++){
+    ctx.beginPath(); ctx.moveTo(-canvas.width, i*22); ctx.lineTo(canvas.width*3, i*22); ctx.stroke();
   }
+  for(let i=-10;i<30;i++){
+    ctx.beginPath(); ctx.moveTo(i*70, -80); ctx.lineTo(i*70-300, 350); ctx.stroke();
+  }
+  ctx.restore();
+
+  // scanlines subtle
+  scanT += dt*1.6;
+  ctx.fillStyle = `rgba(255,255,255,${(Math.sin(scanT*6)+1)*0.012})`;
+  for(let y=0;y<canvas.height;y+=3){ ctx.fillRect(0,y,canvas.width,1); }
 }
 
-function drawPlayer(){
-  ctx.shadowBlur = 20;
-  ctx.shadowColor = "#0ff";
-  ctx.fillStyle = "#0ff";
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+function drawPlayer(dt){
+  // trail
+  trail.push({x: player.x, y: player.y, a: 0.9});
+  if(trail.length > 28) trail.shift();
+  for(let i=0;i<trail.length;i++){
+    const p = trail[i]; p.a *= 0.94;
+    ctx.fillStyle = `rgba(102,255,209,${p.a*0.18})`;
+    ctx.beginPath(); ctx.arc(p.x - camera.x, p.y - camera.y, 16*(i/trail.length), 0, Math.PI*2); ctx.fill();
+  }
+  // core glow
+  const px = player.x - camera.x, py = player.y - camera.y;
+  const g = ctx.createRadialGradient(px-4, py-8, 6, px, py, 28);
+  g.addColorStop(0, "rgba(102,255,209,1)");
+  g.addColorStop(1, "rgba(102,255,209,0.06)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, 20, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "rgba(102,255,209,0.6)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 24, 0, Math.PI*2); ctx.stroke();
 }
 
-function loop(){
-  drawBackground();
-  drawPlayer();
+/* ---------- UI 更新 ---------- */
+function setPanel(node){
+  qEl.textContent = node.text;
+  c1.textContent = node.good.label;
+  c2.textContent = node.bad.label;
+  sceneIdxEl.textContent = String(sceneIndex);
+  sceneTotalEl.textContent = String(sceneTotal);
+  pathNameEl.textContent = path;
+}
+
+function showToast(msg, ms=900){
+  toast.textContent = msg; toast.style.display = 'block';
+  setTimeout(()=> toast.style.display='none', ms);
+}
+
+/* ---------- 动画移动 ---------- */
+function moveAndLoad(choice){
+  if(player.moving) return;
+  const dirRight = (choice === 'good');
+  if(path === '未定') path = dirRight ? '好人线' : '坏人线';
+  const dx = dirRight ? 140 : 0;
+  const dy = dirRight ? 0 : 120;
+
+  animateMove(dx, dy, ()=>{
+    // scene threshold logic (based on canvas dims)
+    if(dirRight && (player.x - camera.x) > canvas.width * 0.68){
+      camera.x += canvas.width; sceneIndex++; sceneTotal = Math.max(sceneTotal, sceneIndex);
+      showToast('进入新画面 →');
+    }
+    if(!dirRight && (player.y - camera.y) > canvas.height * 0.68){
+      camera.y += canvas.height; sceneIndex++; sceneTotal = Math.max(sceneTotal, sceneIndex);
+      showToast('进入新画面 ↓');
+    }
+    historyStack.push({ id: current.id, path, px: player.x, py: player.y, cx: camera.x, cy: camera.y, sceneIndex, sceneTotal });
+    current = NODES[current[choice].next]; setPanel(current);
+  });
+}
+
+function animateMove(dx, dy){
+  player.moving = true;
+  const DURATION = 420;
+  const sx = player.x, sy = player.y;
+  const start = performance.now();
+  return new Promise(resolve=>{
+    (function step(t){
+      const k = Math.min(1, (t - start) / DURATION);
+      const ease = k < .5 ? 2*k*k : -1 + (4 - 2*k)*k;
+      player.x = sx + dx * ease;
+      player.y = sy + dy * ease;
+      if(k < 1) requestAnimationFrame(step); else { player.moving = false; resolve(); }
+    })(start);
+  }).then(()=>{});
+}
+
+/* ---------- back / restart ---------- */
+function backOneStep(){
+  if(!historyStack.length){ showToast('已经在最初'); return; }
+  const h = historyStack.pop();
+  current = NODES[h.id]; path = h.path;
+  player.x = h.px; player.y = h.py; camera.x = h.cx; camera.y = h.cy;
+  sceneIndex = h.sceneIndex; sceneTotal = h.sceneTotal; setPanel(current); showToast('已返回上一步',700);
+}
+
+function restart(){
+  historyStack = []; current = NODES.start;
+  player.x = 72; player.y = canvas.height - 120; camera.x = 0; camera.y = 0;
+  path = '未定'; sceneIndex = 1; sceneTotal = 1; setPanel(current); showToast('已重开');
+}
+
+/* ---------- 事件绑定（触摸优先 + 防双触发） ---------- */
+function bindTap(el, fn){
+  let touched = false;
+  el.addEventListener('touchstart', e=>{ e.preventDefault(); touched = true; fn(); }, { passive:false });
+  el.addEventListener('click', ()=>{ if(touched){ touched = false; return; } fn(); });
+}
+
+bindTap(c1, ()=>{ moveAndLoad('good'); });
+bindTap(c2, ()=>{ moveAndLoad('bad'); });
+bindTap(btnBack, backOneStep);
+bindTap(btnRestart, restart);
+
+window.addEventListener('keydown', (e)=>{
+  if(player.moving && e.code==='Space') return;
+  if(e.key==='1') moveAndLoad('good');
+  if(e.key==='2') moveAndLoad('bad');
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z') backOneStep();
+});
+
+/* ---------- 主循环 ---------- */
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05,(now-last)/1000); last = now;
+  // draw
+  drawBackground(dt);
+  drawPlayer(dt);
   requestAnimationFrame(loop);
 }
-loop();
-
-function setPanel(node){
-  document.getElementById('question').textContent = node.text;
-  document.getElementById('c1').textContent = node.good.label;
-  document.getElementById('c2').textContent = node.bad.label;
-}
-
-function moveAndLoad(choice){
-  current = NODES[current[choice].next];
-  setPanel(current);
-}
-
-document.getElementById('c1').addEventListener('click', ()=>moveAndLoad('good'));
-document.getElementById('c2').addEventListener('click', ()=>moveAndLoad('bad'));
-document.getElementById('c1').addEventListener('touchstart', ()=>moveAndLoad('good'));
-document.getElementById('c2').addEventListener('touchstart', ()=>moveAndLoad('bad'));
-
 setPanel(current);
+requestAnimationFrame(loop);
+
 </script>
 </body>
 </html>
